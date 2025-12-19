@@ -1,0 +1,25 @@
+name: Daily Lottery Sync
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+    - cron: '0 9 * * *'
+    - cron: '0 14 * * *'
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests beautifulsoup4 psycopg2-binary
+      - run: python sync_lottery.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
