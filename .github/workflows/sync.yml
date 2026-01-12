@@ -30,26 +30,3 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python lottery_maintenance.py
-      
-      - name: Notify on failure
-        if: failure()
-        env:
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-        run: |
-          python3 << 'PYEOF'
-          import smtplib, os
-          from email.mime.text import MIMEText
-          msg = MIMEText('Lottery maintenance failed! Check: https://github.com/willpowers2020/lottery-voice-app/actions')
-          msg['Subject'] = 'Lottery Sync FAILED'
-          msg['From'] = os.environ.get('EMAIL_FROM', '')
-          msg['To'] = os.environ.get('EMAIL_TO', '')
-          try:
-              with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
-                  s.login(os.environ['EMAIL_FROM'], os.environ['EMAIL_PASSWORD'])
-                  s.send_message(msg)
-              print('Email sent')
-          except Exception as e:
-              print(f'Email failed: {e}')
-          PYEOF
