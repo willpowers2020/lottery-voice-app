@@ -9,6 +9,9 @@ import re
 from datetime import datetime, timedelta
 import time
 import os
+import sys
+import smtplib
+from email.mime.text import MIMEText
 
 DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres.lewvjrlflatexlcndefi:jx4wdz7vQ62ENoCD@aws-1-us-east-1.pooler.supabase.com:5432/postgres')
 
@@ -156,6 +159,24 @@ GAMES = [
     ('ri', 'numbers-game-evening', 'Rhode Island', 'Numbers Game Evening', 4, 2003),
 ]
 
+def send_email(subject, body):
+    EMAIL_TO = os.environ.get('EMAIL_TO')
+    EMAIL_FROM = os.environ.get('EMAIL_FROM')
+    EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+    if not all([EMAIL_TO, EMAIL_FROM, EMAIL_PASSWORD]): 
+        return
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_FROM
+        msg['To'] = EMAIL_TO
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            s.login(EMAIL_FROM, EMAIL_PASSWORD)
+            s.send_message(msg)
+        print(f"📧 Email sent")
+    except Exception as e:
+        print(f"⚠️ Email failed: {e}")
+
 def find_game_id(cur, state_name, game_pattern):
     patterns = [f'%{game_pattern}%']
     if 'Numbers Game' in game_pattern:
@@ -193,81 +214,97 @@ def scrape_year(state, slug, year, digits):
         return draws
     except: return []
 
-def remove_duplicates(cur):
-    print("\n📋 Removing duplicates...")
-    cur.execute("""SELECT COUNT(*) FROM (SELECT game_id, draw_date, value FROM draws
-        GROUP BY game_id, draw_date, value HAVING COUNT(*) > 1) x""")
-    dup_count = cur.fetchone()[0]
-    if dup_count == 0:
-        print("   ✅ No duplicates")
-        return 0
-    total = 0
-    while True:
-        cur.execute("""DELETE FROM draws WHERE id IN (SELECT id FROM (
-            SELECT id, ROW_NUMBER() OVER (PARTITION BY game_id, draw_date, value ORDER BY id) as rn
-            FROM draws) x WHERE rn > 1 LIMIT 10000)""")
-        if cur.rowcount == 0: break
-        total += cur.rowcount
-    print(f"   ✅ Removed {total:,}")
-    return total
-
 def run():
     print(f"{'='*60}")
     print(f"🎰 LOTTERY MAINTENANCE - {datetime.now()}")
     print(f"{'='*60}")
     
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = True
-    cur = conn.cursor()
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        conn.autocommit = True
+        cur = conn.cursor()
+        print("✅ Connected to database")
+    except Exception as e:
+        print(f"❌ DB CONNECTION FAILED: {e}")
+        send_email("❌ Lottery Sync FAILED", f"Database connection failed: {e}")
+        sys.exit(1)
     
-    cur.execute("SELECT COUNT(*) FROM draws")
-    print(f"\n📊 Before: {cur.fetchone()[0]:,} draws")
+    cur.execute("SELECT COUNT(*), MAX(draw_date) FROM draws")
+    before_count, latest_before = cur.fetchone()
+    print(f"📊 Before: {before_count:,} draws, latest: {latest_before}")
     
-    remove_duplicates(cur)
+    # Skip duplicate removal on Supabase (too slow) - use unique index instead
+    print("\n📋 Checking for unique index...")
+    try:
+        cur.execute("""SELECT 1 FROM pg_indexes WHERE tablename='draws' AND indexname='idx_draws_unique'""")
+        if not cur.fetchone():
+            print("   Creating unique index (this prevents duplicates)...")
+            cur.execute("CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_draws_unique ON draws(game_id, draw_date, value)")
+            print("   ✅ Index created")
+        else:
+            print("   ✅ Index exists")
+    except Exception as e:
+        print(f"   ⚠️ Index check failed: {e}")
     
     print(f"\n📥 SYNCING GAMES...")
     current_year = datetime.now().year
     today = datetime.now().date()
     total_added = 0
+    games_synced = 0
     
     for state_code, slug, state_name, game_pattern, digits, start_year in GAMES:
-        game_id = find_game_id(cur, state_name, game_pattern)
-        if not game_id: continue
-        
-        cur.execute("SELECT MIN(draw_date), MAX(draw_date) FROM draws WHERE game_id = %s", (game_id,))
-        db_earliest, db_latest = cur.fetchone()
-        
-        needs_backfill = not db_earliest or db_earliest.year > start_year
-        needs_sync = not db_latest or db_latest < today - timedelta(days=1)
-        
-        if not needs_backfill and not needs_sync: continue
-        
-        years = []
-        if needs_backfill:
-            years = list(range(start_year, (db_earliest.year if db_earliest else current_year) + 1))
-        if needs_sync:
-            years.extend([current_year - 1, current_year])
-        years = sorted(set(years))
-        
-        added = 0
-        for year in years:
-            for d in scrape_year(state_code, slug, year, digits):
-                try:
-                    cur.execute("""INSERT INTO draws (game_id, draw_date, value, sorted_value, sums)
-                        VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""", (game_id, *d))
-                    added += cur.rowcount
-                except: pass
-            time.sleep(0.05)
-        
-        if added > 0:
-            print(f"   ✅ {state_name} {game_pattern}: +{added}")
-            total_added += added
+        try:
+            game_id = find_game_id(cur, state_name, game_pattern)
+            if not game_id: continue
+            
+            cur.execute("SELECT MIN(draw_date), MAX(draw_date) FROM draws WHERE game_id = %s", (game_id,))
+            db_earliest, db_latest = cur.fetchone()
+            
+            needs_backfill = not db_earliest or db_earliest.year > start_year
+            needs_sync = not db_latest or db_latest < today - timedelta(days=1)
+            
+            if not needs_backfill and not needs_sync: continue
+            
+            years = []
+            if needs_backfill:
+                years = list(range(start_year, (db_earliest.year if db_earliest else current_year) + 1))
+            if needs_sync:
+                years.extend([current_year - 1, current_year])
+            years = sorted(set(years))
+            
+            added = 0
+            for year in years:
+                for d in scrape_year(state_code, slug, year, digits):
+                    try:
+                        cur.execute("""INSERT INTO draws (game_id, draw_date, value, sorted_value, sums)
+                            VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""", (game_id, *d))
+                        added += cur.rowcount
+                    except: pass
+                time.sleep(0.05)
+            
+            if added > 0:
+                print(f"   ✅ {state_name} {game_pattern}: +{added}")
+                total_added += added
+                games_synced += 1
+        except Exception as e:
+            print(f"   ⚠️ {state_name} {game_pattern}: {e}")
     
-    cur.execute("SELECT COUNT(*) FROM draws")
-    print(f"\n📊 After: {cur.fetchone()[0]:,} draws (+{total_added:,})")
+    cur.execute("SELECT COUNT(*), MAX(draw_date) FROM draws")
+    after_count, latest_after = cur.fetchone()
+    
+    print(f"\n{'='*60}")
+    print(f"📊 After: {after_count:,} draws (+{total_added:,})")
+    print(f"📅 Latest: {latest_after}")
+    
+    # Check if current
+    if latest_after and latest_after >= today - timedelta(days=1):
+        print("✅ DATA IS CURRENT")
+    else:
+        print(f"⚠️ DATA MAY BE BEHIND (latest: {latest_after})")
+    
     print(f"{'='*60}")
-    print("✅ DONE")
     conn.close()
+    sys.exit(0)
 
 if __name__ == '__main__':
     run()
