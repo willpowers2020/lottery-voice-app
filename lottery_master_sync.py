@@ -35,11 +35,11 @@ PICK5_DB = os.path.expanduser('~/lottery_scraper/pick5/data/pick5_data.db')
 
 # Supabase PostgreSQL
 DATABASE_URL = os.environ.get('DATABASE_URL', 
-    'postgresql://postgres.lewvjrlflatexlcndefi:jx4wdz7vQ62ENoCD@aws-1-us-east-1.pooler.supabase.com:5432/postgres')
+    '')
 
 # MongoDB
 MONGO_URL = os.environ.get('MONGO_URL', 
-    'mongodb+srv://willpowers2026:dFUATeYtHrP87gPk@cluster0.nmujtyo.mongodb.net/')
+    '')
 MONGO_DB = os.environ.get('MONGO_DB', 'lottery')
 MONGO_COLLECTION = os.environ.get('MONGO_COLLECTION', 'lottery_v2')
 
