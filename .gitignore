@@ -3,3 +3,10 @@
 .env.*
 secrets.json
 *credentials*
+.env
+*.env
+quick_sync*.py
+cleanup.py
+dc5_sync.py
+full_sync.py
+validate_all.py

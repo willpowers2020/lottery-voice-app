@@ -11,7 +11,7 @@ from datetime import datetime
 import os
 import time
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres.lewvjrlflatexlcndefi:jx4wdz7vQ62ENoCD@aws-1-us-east-1.pooler.supabase.com:5432/postgres')
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres.lewvjrlflatexlcndefi:CHANGEME@aws-1-us-east-1.pooler.supabase.com:5432/postgres')
 
 # State code -> (state_name, [(slug, game_id, digits), ...])
 # game_id from Supabase

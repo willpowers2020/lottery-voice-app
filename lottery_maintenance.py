@@ -13,7 +13,7 @@ import sys
 import smtplib
 from email.mime.text import MIMEText
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres.lewvjrlflatexlcndefi:jx4wdz7vQ62ENoCD@aws-1-us-east-1.pooler.supabase.com:5432/postgres')
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres.lewvjrlflatexlcndefi:CHANGEME@aws-1-us-east-1.pooler.supabase.com:5432/postgres')
 
 GAMES = [
     ('fl', 'pick-3-midday', 'Florida', 'Pick 3 Midday', 3, 2008),
