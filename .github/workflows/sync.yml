@@ -2,31 +2,22 @@ name: Daily Lottery Sync
 
 on:
   schedule:
-    - cron: '30 4 * * *'
-    - cron: '0 9 * * *'
+    - cron: '0 6 * * *'
     - cron: '0 14 * * *'
-    - cron: '0 21 * * *'
+    - cron: '0 22 * * *'
   workflow_dispatch:
 
 jobs:
-  maintenance:
+  sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install requests beautifulsoup4 psycopg2-binary
-      
-      - name: Run Lottery Maintenance
+      - run: pip install pymongo requests beautifulsoup4
+      - run: python lottery_master_sync.py --sync
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-        run: python lottery_maintenance.py
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+          MONGO_DB: ${{ secrets.MONGO_DB }}
+          MONGO_COLLECTION: ${{ secrets.MONGO_COLLECTION }}
